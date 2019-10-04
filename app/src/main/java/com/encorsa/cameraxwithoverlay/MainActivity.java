@@ -37,6 +37,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.concurrent.TimeUnit;
+
 //import com.google.android.gms.tasks.OnFailureListener;
 //import com.google.android.gms.tasks.OnSuccessListener;
 //import com.google.android.gms.tasks.Task;
@@ -54,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap bmpOverlay;
     private Paint sRectPaint;
     private TextView textinfo;
+    private long lastAnalyzedTimestamp = 0L;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -249,7 +252,10 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         Image mediaImage = image.getImage();
+                        long currentTimestamp = System.currentTimeMillis();
+                        if((currentTimestamp - lastAnalyzedTimestamp) >= TimeUnit.SECONDS.toMillis(1)){
 
+                        }
 
 
 
