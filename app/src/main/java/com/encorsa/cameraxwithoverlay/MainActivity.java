@@ -27,8 +27,10 @@ import android.media.Image;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.util.Log;
 import android.util.Rational;
 import android.util.Size;
+import android.util.SparseArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -37,16 +39,13 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.vision.Frame;
+import com.google.android.gms.vision.text.Text;
+import com.google.android.gms.vision.text.TextBlock;
+import com.google.android.gms.vision.text.TextRecognizer;
+
 import java.util.concurrent.TimeUnit;
 
-//import com.google.android.gms.tasks.OnFailureListener;
-//import com.google.android.gms.tasks.OnSuccessListener;
-//import com.google.android.gms.tasks.Task;
-//import com.google.firebase.ml.vision.FirebaseVision;
-//import com.google.firebase.ml.vision.common.FirebaseVisionImage;
-//import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
-//import com.google.firebase.ml.vision.text.FirebaseVisionText;
-//import com.google.firebase.ml.vision.text.FirebaseVisionTextRecognizer;
 
 public class MainActivity extends AppCompatActivity {
     private int REQUEST_CODE_PERMISSIONS = 101;
@@ -55,8 +54,14 @@ public class MainActivity extends AppCompatActivity {
     private ImageView overlay;
     private Bitmap bmpOverlay;
     private Paint sRectPaint;
+    private Paint sTextPaint;
     private TextView textinfo;
     private long lastAnalyzedTimestamp = 0L;
+    private TextRecognizer textRecognizer;
+    private Rational screenAspectRatio;
+    private Size screenSize;
+    private Canvas canvas;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,18 +74,23 @@ public class MainActivity extends AppCompatActivity {
         sRectPaint.setColor(Color.WHITE);
         sRectPaint.setStyle(Paint.Style.STROKE);
         sRectPaint.setStrokeWidth(4.0f);
+
+        sTextPaint = new Paint();
+        sTextPaint.setColor(Color.WHITE);
+        sTextPaint.setTextSize(30.0f);
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         //Here you can get the size!
-        bmpOverlay = Bitmap.createBitmap(textureView.getWidth(), textureView.getHeight(), Bitmap.Config.ARGB_8888);
-        if(allPermissionsGranted()){
+
+
+        if (allPermissionsGranted()) {
             //rotation = Display.getRotation();
 
             startCamera(); //start camera if permission has been granted by user
-        } else{
+        } else {
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
     }
@@ -88,19 +98,22 @@ public class MainActivity extends AppCompatActivity {
     private void startCamera() {
 
         CameraX.unbindAll();
+        textRecognizer = new TextRecognizer.Builder(this).build();
+        screenAspectRatio = new Rational(textureView.getWidth(), textureView.getHeight());
+        screenSize = new Size(textureView.getWidth(), textureView.getHeight()); //size of the screen
 
-        Rational aspectRatio = new Rational (textureView.getWidth(), textureView.getHeight());
-        Size screen = new Size(textureView.getWidth(), textureView.getHeight()); //size of the screen
 
-
-        PreviewConfig pConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).build();
+        PreviewConfig pConfig = new PreviewConfig.Builder()
+                //.setTargetAspectRatio(screenAspectRatio)
+                // .setTargetResolution(screenSize)
+                .build();
         Preview preview = new Preview(pConfig);
 
         preview.setOnPreviewOutputUpdateListener(
                 new Preview.OnPreviewOutputUpdateListener() {
                     //to update the surface texture we  have to destroy it first then re-add it
                     @Override
-                    public void onUpdated(Preview.PreviewOutput output){
+                    public void onUpdated(Preview.PreviewOutput output) {
 
                         ViewGroup parent = (ViewGroup) textureView.getParent();
                         parent.removeView(textureView);
@@ -114,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         ImageCaptureConfig imageCaptureConfig = new ImageCaptureConfig.Builder().setCaptureMode(ImageCapture.CaptureMode.MIN_LATENCY)
-                .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).setLensFacing(CameraX.LensFacing.BACK).setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
+                .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).setLensFacing(CameraX.LensFacing.BACK).setTargetAspectRatio(screenAspectRatio).setTargetResolution(screenSize).build();
         final ImageCapture imgCap = new ImageCapture(imageCaptureConfig);
         // findViewById(R.id.imgCapture)
 
@@ -156,10 +169,10 @@ public class MainActivity extends AppCompatActivity {
 
 
         //bind to lifecycle:
-        CameraX.bindToLifecycle((LifecycleOwner)this, preview, imgCap, imageAnalysis);
+        CameraX.bindToLifecycle((LifecycleOwner) this, preview, imgCap, imageAnalysis);
     }
 
-    private void updateTransform(){
+    private void updateTransform() {
         Matrix mx = new Matrix();
         float w = textureView.getMeasuredWidth();
         float h = textureView.getMeasuredHeight();
@@ -170,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
         int rotationDgr;
         int rotation = textureView.getDisplay().getRotation();
 
-        switch(rotation){
+        switch (rotation) {
             case Surface.ROTATION_0:
                 rotationDgr = 0;
                 break;
@@ -187,41 +200,28 @@ public class MainActivity extends AppCompatActivity {
                 return;
         }
 
-        mx.postRotate(-(float)rotationDgr, cX, cY);
+        mx.postRotate(-(float) rotationDgr, cX, cY);
         textureView.setTransform(mx);
 
-//        float scaledWidth, scaledHeight;
-//        if (w > h) {
-//            scaledHeight = w;
-//            scaledWidth = w;
-//        } else {
-//            scaledHeight = h;
-//            scaledWidth = w;
-//        }
-//        float xScale = scaledWidth / w;
-//        float yScale = scaledHeight / h;
-//        mx.preScale(xScale,yScale,cX,cY);
-//        textureView.setTransform(mx);
-//        textureView.getSurfaceTexture().setDefaultBufferSize(textureView.getWidth(),textureView.getHeight());
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
 
-        if(requestCode == REQUEST_CODE_PERMISSIONS){
-            if(allPermissionsGranted()){
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (allPermissionsGranted()) {
                 startCamera();
-            } else{
+            } else {
                 Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show();
                 finish();
             }
         }
     }
 
-    private boolean allPermissionsGranted(){
+    private boolean allPermissionsGranted() {
 
-        for(String permission : REQUIRED_PERMISSIONS){
-            if(ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED){
+        for (String permission : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                 return false;
             }
         }
@@ -236,6 +236,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         ImageAnalysisConfig imageAnalysisConfig = new ImageAnalysisConfig.Builder()
+//                .setMaxResolution(new Size(810, 1080))
+                //.setTargetAspectRatio(screenAspectRatio)
                 .setImageReaderMode(ImageAnalysis.ImageReaderMode.ACQUIRE_LATEST_IMAGE)
                 .setCallbackHandler(new Handler(analyzerThread.getLooper()))
                 .setImageQueueDepth(1).build();
@@ -251,119 +253,46 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
 
-                        Image mediaImage = image.getImage();
                         long currentTimestamp = System.currentTimeMillis();
-                        if((currentTimestamp - lastAnalyzedTimestamp) >= TimeUnit.SECONDS.toMillis(1)){
+                        if ((currentTimestamp - lastAnalyzedTimestamp) >= TimeUnit.SECONDS.toMillis(1)) {
+                            if (textRecognizer.isOperational()) {
 
+                                Frame frame = new Frame.Builder().setBitmap(textureView.getBitmap()).build();//.setImageData(image.getPlane  .getPlanes().[0].getBuffer(), image.getWidth(), image.getHeight(), image.getFormat());
+                                SparseArray<TextBlock> textBlocks = textRecognizer.detect(frame);
+
+                                bmpOverlay = Bitmap.createBitmap(overlay.getWidth(), overlay.getHeight(), Bitmap.Config.ARGB_8888);
+                                canvas = new Canvas(bmpOverlay);
+                                for (int index = 0; index < textBlocks.size(); index++) {
+                                    //extract scanned text blocks here
+                                    TextBlock tBlock = textBlocks.valueAt(index);
+                                    Rect boundingBox = textBlocks.valueAt(index).getBoundingBox();
+                                    Log.i("MainActivity", "" + boundingBox.toString() + tBlock.getValue());
+                                    // .blocks = blocks + tBlock.getValue() + "\n" + "\n";
+
+                                    canvas.drawRect(boundingBox, sRectPaint);
+
+                                    for (Text line : tBlock.getComponents()) {
+
+                                        float left = line.getBoundingBox().left;
+                                        float bottom = line.getBoundingBox().bottom;
+                                        canvas.drawText(line.getValue(), left, bottom, sTextPaint);
+                                    }
+                                }
+                                MainActivity.this.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        //Your code to run in GUI thread here
+                                        overlay.setImageBitmap(bmpOverlay);
+                                        overlay.postInvalidate();
+                                    }
+                                });
+                            }
+                            lastAnalyzedTimestamp = currentTimestamp;
                         }
-
-
-
-                        //TextRecognizer txtRecognizer = new TextRecognizer.Builder(getApplicationContext()).build();
-
-                        //int rotation = degreesToFirebaseRotation(rotationDegrees);
-//                        FirebaseVisionImage image1 =
-//                                FirebaseVisionImage.fromMediaImage(mediaImage, rotation);
-//                        recognizeText(image1);
-//                        Mat mat = new Mat();
-//                        Utils.bitmapToMat(bitmap, mat);
-//
-//
-//                        Imgproc.cvtColor(mat, mat, currentImageType);
-//                        Utils.matToBitmap(mat, bitmap);
-//                        runOnUiThread(new Runnable() {
-//                            @Override
-//                            public void run() {
-//                                ivBitmap.setImageBitmap(bitmap);
-//                            }
-//                        });
-
                     }
                 });
-
 
         return imageAnalysis;
 
     }
-
-//    private int degreesToFirebaseRotation(int degrees) {
-//        switch (degrees) {
-//            case 0:
-//                return FirebaseVisionImageMetadata.ROTATION_0;
-//            case 90:
-//                return FirebaseVisionImageMetadata.ROTATION_90;
-//            case 180:
-//                return FirebaseVisionImageMetadata.ROTATION_180;
-//            case 270:
-//                return FirebaseVisionImageMetadata.ROTATION_270;
-//            default:
-//                throw new IllegalArgumentException(
-//                        "Rotation must be 0, 90, 180, or 270.");
-//        }
-//    }
-//
-//    private void recognizeText(FirebaseVisionImage image) {
-//
-//
-//        // [START get_detector_default]
-//        Canvas canvas = new Canvas(bmpOverlay);
-//
-//        //canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
-//        FirebaseVisionTextRecognizer detector = FirebaseVision.getInstance()
-//                .getOnDeviceTextRecognizer();
-//        // [END get_detector_default]
-//        float scaleX = overlay.getWidth() / image.getBitmap().getWidth();
-//        float scaleY = overlay.getHeight() / image.getBitmap().getHeight();
-//        Toast.makeText(this, "scaleX" + scaleX + " scaleY:" + scaleY, Toast.LENGTH_SHORT).show();
-//
-//        // [START run_detector]
-//        Task<FirebaseVisionText> result =
-//                detector.processImage(image)
-//                        .addOnSuccessListener(new OnSuccessListener<FirebaseVisionText>() {
-//                            @Override
-//                            public void onSuccess(FirebaseVisionText firebaseVisionText) {
-//                                // Task completed successfully
-//                                // [START_EXCLUDE]
-//                                // [START get_text]
-//
-//                                for (FirebaseVisionText.TextBlock block : firebaseVisionText.getTextBlocks()) {
-//                                    Rect boundingBox = block.getBoundingBox();
-//                                    RectF scaledBoundigBox = new RectF(boundingBox.left*scaleX, boundingBox.top*scaleY, boundingBox.right*scaleX, boundingBox.bottom*scaleY);
-//                                    Point[] cornerPoints = block.getCornerPoints();
-//                                    String text = block.getText();
-//                                    canvas.drawRect(scaledBoundigBox, sRectPaint);
-////                                    for (FirebaseVisionText.Line line: block.getLines()) {
-////
-////
-////                                        //Toast.makeText(MainActivity.this, line.getText() + " - " + line.getBoundingBox().toString(), Toast.LENGTH_SHORT).show();line.getBoundingBox();
-////
-////
-////                                        for (FirebaseVisionText.Element element: line.getElements()) {
-////                                            // ...
-////                                        }
-////                                    }
-//
-//                                }
-//                                // [END get_text]
-//                                // [END_EXCLUDE]
-////                                MainActivity.this.runOnUiThread(new Runnable() {
-////                                    @Override
-////                                    public void run() {
-//                                        //Your code to run in GUI thread here
-//                                        overlay.setImageBitmap(bmpOverlay);
-//                                        overlay.postInvalidate();
-////                                    }
-////                                });
-//                            }
-//                        })
-//                        .addOnFailureListener(
-//                                new OnFailureListener() {
-//                                    @Override
-//                                    public void onFailure(@NonNull Exception e) {
-//                                        // Task failed with an exception
-//                                        // ...
-//                                    }
-//                                });
-//        // [END run_detector]
-//    }
 }
