@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "364954724682",
+    "firebase_url": "https://novel-253018.firebaseio.com",
+    "project_id": "novel-253018",
+    "storage_bucket": "novel-253018.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:364954724682:android:dd436d7eea1ed41893f9b3",
+        "android_client_info": {
+          "package_name": "com.encorsa.cameraxwithoverlay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "364954724682-5ksqv84k5d5ojbmhdu2kon87u2s3djch.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.encorsa.cameraxwithoverlay",
+            "certificate_hash": "73a34bcc9bbc29ea96667fc01ed036fe56efb07b"
+          }
+        },
+        {
+          "client_id": "364954724682-ng4k1unubkqhag8k95c0f4p4nu6ivj14.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeqMf2MEexrdwCSdNANgWlQ5xjZ2tZzwY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "364954724682-ng4k1unubkqhag8k95c0f4p4nu6ivj14.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
